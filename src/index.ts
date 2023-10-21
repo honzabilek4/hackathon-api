@@ -14,7 +14,7 @@ const server = createServer(app);
 const io = new Server(server, {
   cors: {
     origin: "*",
-    methods: ["GET", "POST","OPTIONS"]
+    methods: ["GET", "POST", "OPTIONS"]
   }
 });
 
@@ -35,7 +35,7 @@ app.post(`/transcribe`, async (req, res) => {
   try {
     const { original, translated, timestamp, sessionId } = req.body;
     const session = await prisma.session.findUniqueOrThrow({
-      where: {id: sessionId}
+      where: { id: sessionId }
     });
 
     const data = {
@@ -43,11 +43,11 @@ app.post(`/transcribe`, async (req, res) => {
       translated,
       timestamp,
       sessionId
-    }    
+    }
     const createResult = await prisma.transcript.create({
       data,
-    })    
-    const result = {name: session.name, sourceLang: session.sourceLang,targetLang: session.targetLang,...createResult};
+    })
+    const result = { name: session.name, sourceLang: session.sourceLang, targetLang: session.targetLang, ...createResult };
     io.emit("update", result);
     res.json(result)
   }
@@ -58,19 +58,45 @@ app.post(`/transcribe`, async (req, res) => {
   }
 })
 
-app.get("/socket", async (req,res)=>{
+app.get("/socket", async (req, res) => {
   io.emit("update", "test");
   res.json("result")
 })
 
-app.get(`/full-transcript`, async(req,res)=>{
+app.get("/export", async (req, res) => {
+  const transcripts = await prisma.transcript.findMany()
+  const sessions = await prisma.session.findMany();
+  const mergedTranscripts = transcripts.map(t => {
+    const session = sessions.find(s => s.id === t.sessionId);
+    return { name: session?.name, sourceLang: session?.sourceLang, targetLang: session?.targetLang, ...t };
+
+  })
+
+  let csvData = ["name", "timestamp", "original", "translated", "sourceLang", "targetLang"].join(";") + "\r\n";
+  mergedTranscripts.forEach((session) => {
+    // populating the CSV content
+    // and converting the null fields to ""
+    csvData += [session.name, session.timestamp, session.original, session.translated, session.sourceLang, session?.targetLang].join(";") + "\r\n";
+  })
+
+
+  res
+    .set({
+      "Content-Type": "text/csv",
+      "Content-Disposition": `attachment; filename="export.csv"`,
+    }).send(csvData)
+
+
+})
+
+app.get(`/full-transcript`, async (req, res) => {
   try {
     const transcripts = await prisma.transcript.findMany()
     const sessions = await prisma.session.findMany();
-    const mergedTranscripts = transcripts.map(t=> {
-      const session = sessions.find(s=> s.id === t.sessionId);
-      return {name: session?.name, sourceLang: session?.sourceLang,targetLang: session?.targetLang,...t};
-      
+    const mergedTranscripts = transcripts.map(t => {
+      const session = sessions.find(s => s.id === t.sessionId);
+      return { name: session?.name, sourceLang: session?.sourceLang, targetLang: session?.targetLang, ...t };
+
     })
     res.json(mergedTranscripts);
   }
@@ -112,14 +138,14 @@ app.put(`/transcribe/:id`, async (req, res) => {
   }
 })
 
-app.delete(`/transcribe/:id`, async (req, res)=>{
-  try{
+app.delete(`/transcribe/:id`, async (req, res) => {
+  try {
     const result = await prisma.transcript.delete({
-      where: {id: Number(req.params.id)},
+      where: { id: Number(req.params.id) },
     })
     res.json(result);
   }
-  catch(e){
+  catch (e) {
     res.status(500);
     console.log(e)
     res.json({ error: e })
@@ -127,17 +153,17 @@ app.delete(`/transcribe/:id`, async (req, res)=>{
 })
 
 
-app.post(`/session`, async (req, res)=>{
+app.post(`/session`, async (req, res) => {
   try {
     const { sourceLang, targetLang, name } = req.body;
     const data = {
       sourceLang,
       targetLang,
       name
-    }    
+    }
     const result = await prisma.session.create({
       data,
-    })          
+    })
     res.json(result)
   }
   catch (e) {
@@ -147,14 +173,14 @@ app.post(`/session`, async (req, res)=>{
   }
 })
 
-app.get(`/session/:id`, async (req, res)=>{
-  try{
+app.get(`/session/:id`, async (req, res) => {
+  try {
     const result = await prisma.session.delete({
-      where: {id: req.params.id}
+      where: { id: req.params.id }
     })
     res.json(result);
   }
-  catch(e){
+  catch (e) {
     res.status(500);
     console.log(e)
     res.json({ error: e })
@@ -162,7 +188,7 @@ app.get(`/session/:id`, async (req, res)=>{
 })
 
 
-app.get("/session", async (req, res)=> {
+app.get("/session", async (req, res) => {
   try {
     const result = await prisma.session.findMany()
     res.json(result)
@@ -186,4 +212,4 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 });
 
 
-server.listen(3000,()=> console.log("listening for sockets on 3000"))
+server.listen(3000, () => console.log("listening for sockets on 3000"))

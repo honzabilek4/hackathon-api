@@ -2,6 +2,10 @@ generator client {
   provider = "prisma-client-js"
 }
 
+generator docs {
+  provider = "node node_modules/prisma-docs-generator"
+}
+
 datasource db {
   provider = "sqlite"
   url      = "file:./dev.db"
@@ -12,6 +16,16 @@ model Transcript {
   timestamp  DateTime @default(now())
   original   String
   translated String
+  session    Session  @relation(fields: [sessionId], references: [id])
+  sessionId  String
+}
+
+model Session {
+  id         String       @id @default(uuid())
+  sourceLang String
+  targetLang String
+  name       String
+  Transcript Transcript[]
 }
 
 // model User {

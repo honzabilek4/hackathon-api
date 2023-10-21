@@ -33,19 +33,26 @@ io.on('connection', (socket: any) => {
 
 app.post(`/transcribe`, async (req, res) => {
   try {
-    const { original, translated, timestamp } = req.body;
+    const { original, translated, timestamp, sessionId } = req.body;
+    const session = await prisma.session.findUniqueOrThrow({
+      where: {id: sessionId}
+    });
+
     const data = {
       original,
       translated,
-      timestamp
+      timestamp,
+      sessionId
     }    
-    const result = await prisma.transcript.create({
+    const createResult = await prisma.transcript.create({
       data,
-    })      
+    })    
+    const result = {name: session.name, sourceLang: session.sourceLang,targetLang: session.targetLang,...createResult};
     io.emit("update", result);
     res.json(result)
   }
   catch (e) {
+    res.status(500)
     res.json({ error: e })
   }
 })
@@ -55,12 +62,30 @@ app.get("/socket", async (req,res)=>{
   res.json("result")
 })
 
+app.get(`/full-transcript`, async(req,res)=>{
+  try {
+    const transcripts = await prisma.transcript.findMany()
+    const sessions = await prisma.session.findMany();
+    const mergedTranscripts = transcripts.map(t=> {
+      const session = sessions.find(s=> s.id === t.sessionId);
+      return {name: session?.name, sourceLang: session?.sourceLang,targetLang: session?.targetLang,...t};
+      
+    })
+    res.json(mergedTranscripts);
+  }
+  catch (e) {
+    res.status(500);
+    res.json({ error: e })
+  }
+})
+
 app.get(`/transcribe`, async (req, res) => {
   try {
     const result = await prisma.transcript.findMany()
     res.json(result)
   }
   catch (e) {
+    res.status(500);
     res.json({ error: e })
   }
 })
@@ -78,6 +103,7 @@ app.put(`/transcribe/:id`, async (req, res) => {
     res.json(result)
   }
   catch (e) {
+    res.status(500);
     res.json({ error: e })
   }
 })
@@ -90,6 +116,52 @@ app.delete(`/transcribe/:id`, async (req, res)=>{
     res.json(result);
   }
   catch(e){
+    res.status(500);
+    res.json({ error: e })
+  }
+})
+
+
+app.post(`/session`, async (req, res)=>{
+  try {
+    const { sourceLang, targetLang, name } = req.body;
+    const data = {
+      sourceLang,
+      targetLang,
+      name
+    }    
+    const result = await prisma.session.create({
+      data,
+    })          
+    res.json(result)
+  }
+  catch (e) {
+    res.status(500)
+    res.json({ error: e })
+  }
+})
+
+app.get(`/session/:id`, async (req, res)=>{
+  try{
+    const result = await prisma.session.delete({
+      where: {id: req.params.id}
+    })
+    res.json(result);
+  }
+  catch(e){
+    res.status(500);
+    res.json({ error: e })
+  }
+})
+
+
+app.get("/session", async (req, res)=> {
+  try {
+    const result = await prisma.session.findMany()
+    res.json(result)
+  }
+  catch (e) {
+    res.status(500);
     res.json({ error: e })
   }
 })
@@ -244,5 +316,5 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   });
 });
 
-// app.listen(3000, () => console.log(`🚀 Server ready at: http://localhost:3000`))
+
 server.listen(3000,()=> console.log("listening for sockets on 3000"))

@@ -129,6 +129,7 @@ app.put(`/transcribe/:id`, async (req, res) => {
         translated
       }
     });
+    io.emit("edit", result);    
     res.json(result)
   }
   catch (e) {
